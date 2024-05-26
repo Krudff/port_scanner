@@ -15,44 +15,53 @@ def res():
     if(len(main_array)==0):
         print("No "+str(inp[0])[1:].upper()+" ports are open in the given range")
         sys.exit()
-    print("IP Address \tPort \tService \tBanner")
+    print("IP Address \tPort \tService")
     for p in main_array:
         try:
             serv = getservbyport(p[1])
+            print(str(p[0])+"\t"+str(p[1])+"/"+str(inp[0])[1:]+"\t"+serv)
         except:
             serv = "unknown"
-        print(str(p[0])+"\t"+str(p[1])+"\t"+serv+"\t\t"+p[2].split(" ")[0])
 
 def print_bar():
-    lv = (scanned*30)//(len(port_list))
+    lv = (scanned*30)//((len(port_list)*len(ip_list)))
     if(lv == 30):
         print("Scan Done: " + "|" + "\u2588"*lv + " "*(30-lv) + "|", end="\r")
     else:
         print("Scanning:  " + "|" + "\u2588"*lv + " "*(30-lv) + "|", end="\r")
 def conn(ipx,portx,lock):
     addr = (ipx,portx)
+    global scanned
     if(inp[0] == "-tcp"):
-        s = socket(AF_INET,SOCK_STREAM)#for ipv4
+        try:
+            s = socket(AF_INET,SOCK_STREAM)#for ipv4
+            result = s.connect_ex(addr)#if 0 then connection success
+            s.close()
+            lock.acquire()
+            scanned = scanned + 1
+            print_bar()
+            if(result==0):
+                #print("The port number {} is open".format(portx))
+                main_array.append((ipx,portx))
+            lock.release()
+        except:
+            pass
     #AF_INET -> AF_INET6 for ipv6
     #SOCK_STREAM -> SOCK_DGRAM for udp
     else:
-        s = socket(AF_INET,SOCK_DGRAM)
-    result = s.connect_ex(addr)#if 0 then connection success
-    try:
-        s.send(b'YourAckPls\r\n')
-        banner = str(s.recv(1024),"ascii")
-        s.close()
-        lock.acquire()
-        global scanned
-        scanned = scanned + 1
-        print_bar()
-        if(result==0):
-            #print("The port number {} is open".format(portx))
-            main_array.append((ipx,portx,banner))
-        lock.release()
-    except:
-        pass
-    
+        try:
+            s = socket(AF_INET,SOCK_DGRAM)
+            s.sendto(b"www.google.com",addr)
+            data, _ = s.recvfrom(1024)
+            s.close()
+            lock.acquire()
+            scanned = scanned + 1
+            print_bar()
+            if(data):
+                main_array.append((ipx,portx))
+            lock.release()
+        except:
+            pass
 
 def port_scan(ip_list,port_list):
     for ip in ip_list:
@@ -127,19 +136,18 @@ inp = sys.argv[1:]
 try:
     if not(inp[0] == "-tcp" or inp[0] == "-udp"):
         raise err
-    if not(inp[1] == "-ip" or inp[1] == "-hostname" or inp[1] == "-range" or inp[1] == "-network"):
+    if not(inp[1] == "-ip" or inp[1] == "-range" or inp[1] == "-network"):
         raise err
     if not(inp[2] == "-default" or inp[2] == "-port" or inp[2] == "-port_range"):
         raise err
 except:
-    print("USAGE: \n \u2022 port_scanner.py <-tcp or -udp> <-ip or -hostname or -range or -network> <-default or -port or -port_range>")
+    print("USAGE: \n \u2022 port_scanner.py <-tcp or -udp> <-ip or -range or -network> <-default or -port or -port_range>")
     sys.exit()
 
 # get the list of ips to scan
 if inp[1] == "-ip":
-    ip_list = [input("Enter the ip address (e.g. 202.92.128.181): ")]
-elif inp[1] == "-hostname":
-    ip_list = [get_ip_from_hostname(input("Enter hostname (e.g. pleni.upd.edu.ph): "))]
+    ip_list = [get_ip_from_hostname(input("Enter hostname (e.g. pleni.upd.edu.ph or 202.92.128.1): "))]
+    
 elif inp[1] == "-range":
     ip_list = []
     start_ip, end_ip = input("Enter range (e.g. 202.92.128.1-202.92.128.254): ").split("-")
